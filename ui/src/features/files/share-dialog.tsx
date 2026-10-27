@@ -406,7 +406,9 @@ export function ShareDialog({
 
           {createdUrl ? (
             <div className="flex gap-2 rounded-xl border border-border bg-surface p-3">
-              <Input readOnly value={createdUrl} className="min-w-0 flex-1" />
+              <div className="min-w-0 flex-1">
+                <Input readOnly value={createdUrl} className="w-full" />
+              </div>
               <Button
                 size="sm"
                 variant="secondary"
@@ -430,7 +432,9 @@ export function ShareDialog({
             <div className="grid gap-1.5 rounded-xl border border-border bg-surface p-3">
               <span className="text-xs font-medium text-muted">{t("share.streamLinkLabel")}</span>
               <div className="flex gap-2">
-                <Input readOnly value={createdStreamUrl} className="min-w-0 flex-1" />
+                <div className="min-w-0 flex-1">
+                  <Input readOnly value={createdStreamUrl} className="w-full" />
+                </div>
                 <Button
                   size="sm"
                   variant="primary"
