@@ -501,15 +501,16 @@ type FileBookmark struct {
 }
 
 type FilePart struct {
-	FileID     pgtype.UUID        `json:"file_id"`
-	PartNo     int32              `json:"part_no"`
-	ChannelID  int64              `json:"channel_id"`
-	MessageID  int64              `json:"message_id"`
-	PlainSize  pgtype.Int8        `json:"plain_size"`
-	StoredSize pgtype.Int8        `json:"stored_size"`
-	Checksum   pgtype.Text        `json:"checksum"`
-	Salt       pgtype.Text        `json:"salt"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	SourceUsername pgtype.Text        `json:"-"`
+	FileID         pgtype.UUID        `json:"file_id"`
+	PartNo         int32              `json:"part_no"`
+	ChannelID      int64              `json:"channel_id"`
+	MessageID      int64              `json:"message_id"`
+	PlainSize      pgtype.Int8        `json:"plain_size"`
+	StoredSize     pgtype.Int8        `json:"stored_size"`
+	Checksum       pgtype.Text        `json:"checksum"`
+	Salt           pgtype.Text        `json:"salt"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	// Concatenated 32-byte BLAKE3 hashes for each 16 MiB plaintext block in this finalized part.
 	BlockHashes []byte `json:"block_hashes"`
 }

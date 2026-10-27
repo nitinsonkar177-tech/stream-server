@@ -167,7 +167,7 @@ func (d *Downloader) resolveMissingPartSizes(ctx context.Context, session telegr
 			continue
 		}
 		stored, err := session.Metadata(ctx, telegramstore.MetadataRequest{
-			UserID: userID, ChannelID: part.ChannelID, MessageID: part.MessageID,
+			UserID: userID, ChannelID: part.ChannelID, MessageID: part.MessageID, SourceUsername: part.SourceUsername.String,
 		})
 		if err != nil {
 			return fmt.Errorf("resolve Telegram part %d metadata: %w", part.PartNo, err)
@@ -417,13 +417,13 @@ func (r *downloadReader) openPartReader(segment downloadSegment, partOffset, spa
 		}
 		reader, err = cipher.DecryptDataSeek(r.ctx, func(openCtx context.Context, offset, limit int64) (io.ReadCloser, error) {
 			return r.session.OpenRange(openCtx, telegramstore.RangeRequest{
-				UserID: r.userID, ChannelID: segment.part.ChannelID, MessageID: segment.part.MessageID,
+				UserID: r.userID, ChannelID: segment.part.ChannelID, MessageID: segment.part.MessageID, SourceUsername: segment.part.SourceUsername.String,
 				Offset: offset, Length: limit,
 			})
 		}, partOffset, span)
 	} else {
 		reader, err = r.session.OpenRange(r.ctx, telegramstore.RangeRequest{
-			UserID: r.userID, ChannelID: segment.part.ChannelID, MessageID: segment.part.MessageID,
+			UserID: r.userID, ChannelID: segment.part.ChannelID, MessageID: segment.part.MessageID, SourceUsername: segment.part.SourceUsername.String,
 			Offset: partOffset, Length: span,
 		})
 	}

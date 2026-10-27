@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -152,7 +153,7 @@ func (s *GotdStorage) Metadata(ctx context.Context, request MetadataRequest) (St
 	}
 	var stored StoredPart
 	err := s.runner.Run(ctx, request.UserID, OperationDownload, func(runCtx context.Context, api *tg.Client) error {
-		_, size, err := fetchDocumentLocation(runCtx, api, request.ChannelID, request.MessageID, s.globalCache)
+		_, size, err := sourceDocumentLocation(runCtx, api, request.ChannelID, request.MessageID, request.SourceUsername, s.globalCache)
 		if err != nil {
 			return err
 		}
@@ -173,12 +174,12 @@ func (s *GotdStorage) OpenRange(ctx context.Context, request RangeRequest) (io.R
 	reader := newTelegramRangeReader(streamCtx, cancel, s.downloadReadBuffers, s.downloadReadParallel)
 	go func() {
 		err := runWithConnections(streamCtx, s.runner, request.UserID, OperationDownload, s.downloadReadParallel, func(runCtx context.Context, api *tg.Client) error {
-			location, documentSize, err := fetchDocumentLocation(runCtx, api, request.ChannelID, request.MessageID, s.globalCache)
+			location, documentSize, err := sourceDocumentLocation(runCtx, api, request.ChannelID, request.MessageID, request.SourceUsername, s.globalCache)
 			if err != nil {
 				return err
 			}
 			refresh := func(refreshCtx context.Context) (*tg.InputDocumentFileLocation, error) {
-				refreshed, _, refreshErr := refreshDocumentLocation(refreshCtx, api, request.ChannelID, request.MessageID, s.globalCache)
+				refreshed, _, refreshErr := sourceDocumentLocation(refreshCtx, api, request.ChannelID, request.MessageID, request.SourceUsername, nil)
 				return refreshed, refreshErr
 			}
 			return fillRangeWithLocation(runCtx, api, request, reader, location, documentSize, refresh)
@@ -300,7 +301,7 @@ func (s *gotdDownloadSession) Metadata(ctx context.Context, request MetadataRequ
 	if err != nil {
 		return StoredPart{}, err
 	}
-	_, size, err := s.documentLocation(ctx, api, request.ChannelID, request.MessageID)
+	_, size, err := sourceDocumentLocation(WithClientID(ctx, s.clientID), api, request.ChannelID, request.MessageID, request.SourceUsername, s.globalCache)
 	if err != nil {
 		return StoredPart{}, err
 	}
@@ -315,13 +316,13 @@ func (s *gotdDownloadSession) OpenRange(ctx context.Context, request RangeReques
 	streamCtx, cancel := context.WithCancel(ctx)
 	reader := newTelegramRangeReader(streamCtx, cancel, s.downloadReadBuffers, s.downloadReadParallel)
 	go func() {
-		location, size, locationErr := s.documentLocation(streamCtx, api, request.ChannelID, request.MessageID)
+		location, size, locationErr := sourceDocumentLocation(WithClientID(streamCtx, s.clientID), api, request.ChannelID, request.MessageID, request.SourceUsername, s.globalCache)
 		if locationErr != nil {
 			reader.finish(locationErr)
 			return
 		}
 		refresh := func(refreshCtx context.Context) (*tg.InputDocumentFileLocation, error) {
-			refreshed, _, refreshErr := s.refreshDocumentLocation(refreshCtx, api, request.ChannelID, request.MessageID)
+			refreshed, _, refreshErr := sourceDocumentLocation(WithClientID(refreshCtx, s.clientID), api, request.ChannelID, request.MessageID, request.SourceUsername, nil)
 			return refreshed, refreshErr
 		}
 		reader.finish(fillRangeWithLocation(streamCtx, api, request, reader, location, size, refresh))
@@ -940,6 +941,10 @@ func documentLocation(ctx context.Context, api *tg.Client, channelID, messageID 
 	if err != nil {
 		return nil, 0, err
 	}
+	return documentLocationWithChannel(ctx, api, channel, messageID)
+}
+
+func documentLocationWithChannel(ctx context.Context, api *tg.Client, channel *tg.InputChannel, messageID int64) (*tg.InputDocumentFileLocation, int64, error) {
 	response, err := api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
 		Channel: channel,
 		ID:      []tg.InputMessageClass{&tg.InputMessageID{ID: int(messageID)}},
@@ -979,4 +984,25 @@ type cancelReadCloser struct {
 func (r *cancelReadCloser) Close() error {
 	r.cancel()
 	return r.ReadCloser.Close()
+}
+
+var publicSourceUsernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{3,31}$`)
+
+// A public username is retained from the user's import URL. Resolve it with
+// this request's owner's session, never from another account's peer cache.
+func sourceDocumentLocation(ctx context.Context, api *tg.Client, channelID, messageID int64, username string, c cache.Cacher) (*tg.InputDocumentFileLocation, int64, error) {
+	if username == "" {
+		return fetchDocumentLocation(ctx, api, channelID, messageID, c)
+	}
+	if !publicSourceUsernamePattern.MatchString(username) {
+		return nil, 0, ErrInvalidRequest
+	}
+	channel, err := linkChannel(ctx, api, TelegramLinkRef{Username: username})
+	if err != nil {
+		return nil, 0, err
+	}
+	if channel.ID != channelID {
+		return nil, 0, ErrInvalidChannel
+	}
+	return documentLocationWithChannel(ctx, api, channel.AsInput(), messageID)
 }

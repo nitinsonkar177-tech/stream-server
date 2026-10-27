@@ -63,9 +63,10 @@ type DocumentMessageLister interface {
 }
 
 type MetadataRequest struct {
-	UserID    int64
-	ChannelID int64
-	MessageID int64
+	SourceUsername string
+	UserID         int64
+	ChannelID      int64
+	MessageID      int64
 }
 
 // MetadataReader resolves Telegram document metadata without opening its body.
@@ -75,11 +76,12 @@ type MetadataReader interface {
 }
 
 type RangeRequest struct {
-	UserID    int64
-	ChannelID int64
-	MessageID int64
-	Offset    int64
-	Length    int64 // -1 reads through the end of the document.
+	SourceUsername string
+	UserID         int64
+	ChannelID      int64
+	MessageID      int64
+	Offset         int64
+	Length         int64 // -1 reads through the end of the document.
 }
 
 // DownloadSession reuses one authenticated Telegram client for all metadata and

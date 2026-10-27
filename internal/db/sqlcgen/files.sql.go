@@ -599,7 +599,7 @@ func (q *Queries) ListFilePartMessageRefs(ctx context.Context, fileIds []pgtype.
 
 const listFileParts = `-- name: ListFileParts :many
 
-SELECT file_id, part_no, channel_id, message_id, plain_size, stored_size, checksum, salt, created_at, block_hashes
+SELECT file_id, part_no, channel_id, message_id, plain_size, stored_size, checksum, salt, created_at, block_hashes, source_username
 FROM /* TEMPLATE: schema */file_parts
 WHERE file_id = $1
 ORDER BY part_no
@@ -626,6 +626,7 @@ func (q *Queries) ListFileParts(ctx context.Context, fileID pgtype.UUID) ([]*Fil
 			&i.Salt,
 			&i.CreatedAt,
 			&i.BlockHashes,
+			&i.SourceUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -638,7 +639,7 @@ func (q *Queries) ListFileParts(ctx context.Context, fileID pgtype.UUID) ([]*Fil
 }
 
 const listFilePartsByFileIDs = `-- name: ListFilePartsByFileIDs :many
-SELECT file_id, part_no, channel_id, message_id, plain_size, stored_size, checksum, salt, created_at, block_hashes
+SELECT file_id, part_no, channel_id, message_id, plain_size, stored_size, checksum, salt, created_at, block_hashes, source_username
 FROM /* TEMPLATE: schema */file_parts
 WHERE file_id = ANY($1::uuid[])
 ORDER BY file_id, part_no
@@ -664,6 +665,7 @@ func (q *Queries) ListFilePartsByFileIDs(ctx context.Context, fileIds []pgtype.U
 			&i.Salt,
 			&i.CreatedAt,
 			&i.BlockHashes,
+			&i.SourceUsername,
 		); err != nil {
 			return nil, err
 		}

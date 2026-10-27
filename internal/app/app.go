@@ -241,6 +241,7 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ap
 	mux.Use(httpRequestLogger(dependencies.Logger, requestSecurity))
 	if linkResolver, ok := storage.(imports.Resolver); ok {
 		if importService, importErr := imports.NewService(pool, linkResolver); importErr == nil {
+			importService.SetCacheInvalidator(catalogService)
 			importHandler := imports.NewHTTPHandler(authenticator, importService)
 			mux.Post("/api/v1/import/telegram-link", requestSecurity.middleware(browserCSRFMiddleware(sessionRenewalMiddleware(authService, importHandler))).ServeHTTP)
 		} else {

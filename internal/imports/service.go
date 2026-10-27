@@ -53,8 +53,11 @@ type Result struct {
 
 // Service performs reference imports of Telegram message media.
 type Service struct {
-	pool     *pgxpool.Pool
-	resolver Resolver
+	pool        *pgxpool.Pool
+	resolver    Resolver
+	invalidator interface {
+		InvalidateFiles(context.Context, int64, ...uuid.UUID)
+	}
 }
 
 // NewService validates dependencies and returns the import service.
@@ -64,6 +67,10 @@ func NewService(pool *pgxpool.Pool, resolver Resolver) (*Service, error) {
 	}
 	return &Service{pool: pool, resolver: resolver}, nil
 }
+
+func (s *Service) SetCacheInvalidator(i interface {
+	InvalidateFiles(context.Context, int64, ...uuid.UUID)
+}) { s.invalidator = i }
 
 // ImportTelegramLink registers a Telegram channel message's media as a file
 // at the importing user's drive root. No media bytes are copied: the catalog
@@ -96,6 +103,32 @@ func (s *Service) ImportTelegramLink(ctx context.Context, userID int64, rawURL s
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Re-importing the same public link repairs only its owned reference and
+	// preserves the existing file ID, name and every share URL.
+	if ref.Username != "" {
+		var existing Result
+		var existingID pgtype.UUID
+		err := tx.QueryRow(ctx, `UPDATE `+sqlcgen.QualifiedName("file_parts")+` p
+ SET source_username=$1 FROM `+sqlcgen.QualifiedName("files")+` f
+ WHERE p.file_id=f.id AND f.user_id=$2 AND f.status='active'
+ AND p.channel_id=$3 AND p.message_id=$4
+ RETURNING f.id,f.name,f.size,COALESCE(f.mime_type,'application/octet-stream')`,
+			strings.ToLower(ref.Username), userID, document.ChannelID, document.MessageID).Scan(&existingID, &existing.Name, &existing.Size, &existing.MIMEType)
+		if err == nil {
+			existing.FileID = existingID.Bytes
+			if err = tx.Commit(ctx); err != nil {
+				return nil, err
+			}
+			if s.invalidator != nil {
+				s.invalidator.InvalidateFiles(ctx, userID, existing.FileID)
+			}
+			return &existing, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("repair imported reference: %w", err)
+		}
+	}
+
 	var fileID pgtype.UUID
 	for attempt := 0; attempt < 20; attempt++ {
 		candidate := candidateName(name, attempt)
@@ -127,9 +160,9 @@ func (s *Service) ImportTelegramLink(ctx context.Context, userID int64, rawURL s
 	}
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO `+sqlcgen.QualifiedName("file_parts")+` (file_id, part_no, channel_id, message_id, plain_size, stored_size)
-		 VALUES ($1, 1, $2, $3, $4, $4)`,
-		fileID, document.ChannelID, document.MessageID, document.Size,
+		`INSERT INTO `+sqlcgen.QualifiedName("file_parts")+` (file_id, part_no, channel_id, message_id, plain_size, stored_size, source_username)
+		 VALUES ($1, 1, $2, $3, $4, $4, NULLIF($5,''))`,
+		fileID, document.ChannelID, document.MessageID, document.Size, strings.ToLower(ref.Username),
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "channel_id") {
