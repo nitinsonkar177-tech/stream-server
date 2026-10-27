@@ -242,7 +242,7 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ap
 	if linkResolver, ok := storage.(imports.Resolver); ok {
 		if importService, importErr := imports.NewService(pool, linkResolver); importErr == nil {
 			importHandler := imports.NewHTTPHandler(authenticator, importService)
-			mux.Post("/api/v1/import/telegram-link", requestSecurity.middleware(browserCSRFMiddleware(sessionRenewalMiddleware(authService, importHandler))))
+			mux.Post("/api/v1/import/telegram-link", requestSecurity.middleware(browserCSRFMiddleware(sessionRenewalMiddleware(authService, importHandler))).ServeHTTP)
 		} else {
 			dependencies.Logger.Warn("telegram link import route unavailable", "error", importErr)
 		}
