@@ -997,12 +997,24 @@ func sourceDocumentLocation(ctx context.Context, api *tg.Client, channelID, mess
 	if !publicSourceUsernamePattern.MatchString(username) {
 		return nil, 0, ErrInvalidRequest
 	}
-	channel, err := linkChannel(ctx, api, TelegramLinkRef{Username: username})
-	if err != nil {
-		return nil, 0, err
+	fetch := func() (cachedDocumentLocation, error) {
+		channel, err := linkChannel(ctx, api, TelegramLinkRef{Username: username})
+		if err != nil {
+			return cachedDocumentLocation{}, err
+		}
+		if channel.ID != channelID {
+			return cachedDocumentLocation{}, ErrInvalidChannel
+		}
+		loc, size, err := documentLocationWithChannel(ctx, api, channel.AsInput(), messageID)
+		return cachedDocumentLocation{Location: loc, Size: size}, err
 	}
-	if channel.ID != channelID {
-		return nil, 0, ErrInvalidChannel
+	clientID, ok := ClientID(ctx)
+	if c == nil || !ok {
+		r, err := fetch()
+		return r.Location, r.Size, err
 	}
-	return documentLocationWithChannel(ctx, api, channel.AsInput(), messageID)
+	// Includes account, channel, message and supplied username. A changed URL or
+	// another Telegram account cannot inherit a cached peer/location.
+	r, err := cache.Fetch(ctx, c, cache.Key("telegram", "public-document", clientID, channelID, messageID, strings.ToLower(username)), 4*time.Hour, fetch)
+	return r.Location, r.Size, err
 }

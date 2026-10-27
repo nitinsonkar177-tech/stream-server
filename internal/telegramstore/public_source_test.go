@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
+	"github.com/tgdrive/teldrive/v2/internal/cache"
 	"testing"
 )
 
@@ -59,5 +60,27 @@ func TestPublicSourceRetainsResolvedHashAndChecksChannel(t *testing.T) {
 		if i.usernameCalls != 1 {
 			t.Fatal("not resolved per owner request")
 		}
+	}
+}
+
+func TestPublicSourceCacheIsAccountScoped(t *testing.T) {
+	c := cache.NewMemoryCache(1024 * 1024)
+	defer c.Close()
+	i := &publicSourceInvoker{channel: 42, hash: 987}
+	api := tg.NewClient(i)
+	for _, account := range []int64{100, 100, 200} {
+		if _, _, err := sourceDocumentLocation(WithClientID(context.Background(), account), api, 42, 7, "synthetic_channel", c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if i.usernameCalls != 2 || i.messageCalls != 2 {
+		t.Fatalf("account isolation/cache calls=%d/%d", i.usernameCalls, i.messageCalls)
+	}
+	// nil cache is the explicit expired-reference refresh path.
+	if _, _, err := sourceDocumentLocation(WithClientID(context.Background(), 100), api, 42, 7, "synthetic_channel", nil); err != nil {
+		t.Fatal(err)
+	}
+	if i.usernameCalls != 3 {
+		t.Fatal("refresh did not bypass cache")
 	}
 }
