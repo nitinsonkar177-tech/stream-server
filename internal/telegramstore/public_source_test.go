@@ -21,7 +21,9 @@ func (i *publicSourceInvoker) Invoke(_ context.Context, input bin.Encoder, outpu
 		if r.Username != "synthetic_channel" {
 			return fmt.Errorf("unexpected username")
 		}
-		*output.(*tg.ContactsResolvedPeer) = tg.ContactsResolvedPeer{Chats: []tg.ChatClass{&tg.Channel{ID: i.channel, AccessHash: i.hash}}}
+		channel := &tg.Channel{ID: i.channel}
+		channel.SetAccessHash(i.hash)
+		*output.(*tg.ContactsResolvedPeer) = tg.ContactsResolvedPeer{Chats: []tg.ChatClass{channel}}
 		return nil
 	case *tg.ChannelsGetMessagesRequest:
 		i.messageCalls++
@@ -29,7 +31,12 @@ func (i *publicSourceInvoker) Invoke(_ context.Context, input bin.Encoder, outpu
 		if c.ChannelID != i.channel || c.AccessHash != i.hash {
 			return fmt.Errorf("lost resolved access hash")
 		}
-		output.(*tg.MessagesMessagesBox).Messages = &tg.MessagesMessages{Messages: []tg.MessageClass{&tg.Message{ID: 7, Media: &tg.MessageMediaDocument{Document: &tg.Document{ID: 99, AccessHash: 555, Size: 1234}}}}}
+		doc := &tg.Document{ID: 99, AccessHash: 555, Size: 1234}
+		media := &tg.MessageMediaDocument{}
+		media.SetDocument(doc)
+		msg := &tg.Message{ID: 7}
+		msg.SetMedia(media)
+		output.(*tg.MessagesMessagesBox).Messages = &tg.MessagesMessages{Messages: []tg.MessageClass{msg}}
 		return nil
 	}
 	return fmt.Errorf("unexpected RPC %T", input)
