@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/tgdrive/teldrive/v2/internal/streamdiag"
 )
 
 func httpRequestLogger(logger *slog.Logger, security *requestSecurity) func(http.Handler) http.Handler {
@@ -19,6 +20,10 @@ func httpRequestLogger(logger *slog.Logger, security *requestSecurity) func(http
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.HasPrefix(r.URL.Path, "/v1/") && !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/health/") {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if streamdiag.Active(r.Context()) {
 				next.ServeHTTP(w, r)
 				return
 			}

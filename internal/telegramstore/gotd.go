@@ -18,6 +18,7 @@ import (
 	"github.com/gotd/td/tgerr"
 
 	"github.com/tgdrive/teldrive/v2/internal/cache"
+	"github.com/tgdrive/teldrive/v2/internal/streamdiag"
 )
 
 const (
@@ -263,14 +264,16 @@ func (s *GotdStorage) OpenDownloadSession(ctx context.Context, userID int64) (Do
 		globalCache:          s.globalCache,
 	}
 	go func() {
-		err := runWithConnections(sessionCtx, s.runner, userID, OperationDownload, s.downloadReadParallel, func(runCtx context.Context, api *tg.Client) error {
-			session.mu.Lock()
-			session.api = api
-			session.clientID, _ = ClientID(runCtx)
-			session.mu.Unlock()
-			close(session.ready)
-			<-runCtx.Done()
-			return runCtx.Err()
+		err := streamdiag.Protect(sessionCtx, func() error {
+			return runWithConnections(sessionCtx, s.runner, userID, OperationDownload, s.downloadReadParallel, func(runCtx context.Context, api *tg.Client) error {
+				session.mu.Lock()
+				session.api = api
+				session.clientID, _ = ClientID(runCtx)
+				session.mu.Unlock()
+				close(session.ready)
+				<-runCtx.Done()
+				return runCtx.Err()
+			})
 		})
 		session.mu.Lock()
 		session.err = err
@@ -324,7 +327,7 @@ func (s *gotdDownloadSession) OpenRange(ctx context.Context, request RangeReques
 			refreshed, _, refreshErr := s.refreshDocumentLocation(refreshCtx, api, request.ChannelID, request.MessageID)
 			return refreshed, refreshErr
 		}
-		reader.finish(fillRangeWithLocation(streamCtx, api, request, reader, location, size, refresh))
+		reader.finish(streamdiag.Protect(streamCtx, func() error { return fillRangeWithLocation(streamCtx, api, request, reader, location, size, refresh) }))
 	}()
 	return reader, nil
 }

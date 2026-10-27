@@ -17,6 +17,7 @@ import (
 	"github.com/tgdrive/teldrive/v2/internal/db/sqlcgen"
 	"github.com/tgdrive/teldrive/v2/internal/dbtypes"
 	"github.com/tgdrive/teldrive/v2/internal/shares"
+	"github.com/tgdrive/teldrive/v2/internal/streamdiag"
 	"github.com/tgdrive/teldrive/v2/internal/transfer"
 )
 
@@ -50,6 +51,35 @@ func (h *RawHandler) DownloadFileLegacy(ctx context.Context, params gen.Download
 }
 
 func (h *RawHandler) DownloadPublicShare(ctx context.Context, params gen.DownloadPublicShareParams, w http.ResponseWriter) error {
+	if streamdiag.Active(ctx) {
+		streamdiag.Mark(ctx, "share-resolve")
+		resolved, err := h.handler.Shares.ResolveContent(ctx, shares.ContentRequest{Token: params.Token})
+		if err != nil {
+			streamdiag.Write(ctx, w, err)
+			return nil
+		}
+		streamdiag.Mark(ctx, "share-resolved")
+		id, ok := dbtypes.GoogleUUID(resolved.File.ID)
+		if !ok {
+			streamdiag.Write(ctx, w, transfer.ErrInvalidDownload)
+			return nil
+		}
+		streamdiag.Mark(ctx, "downloader-open")
+		download, err := h.handler.Downloader.Open(ctx, transfer.DownloadRequest{UserID: resolved.Share.OwnerID, FileID: id, Offset: 0, Length: 65536})
+		if err != nil {
+			streamdiag.Write(ctx, w, err)
+			return nil
+		}
+		defer download.Reader.Close()
+		streamdiag.Mark(ctx, "downloader-opened")
+		_, err = io.CopyN(io.Discard, download.Reader, 1)
+		if err == nil {
+			streamdiag.Mark(ctx, "first-byte")
+		}
+		streamdiag.Write(ctx, w, err)
+		return nil
+	}
+
 	if h.handler == nil || h.handler.Shares == nil || h.handler.Downloader == nil {
 		return mapServiceError(ErrOperationUnavailable)
 	}

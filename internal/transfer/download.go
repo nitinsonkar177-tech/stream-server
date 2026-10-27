@@ -13,6 +13,7 @@ import (
 
 	"github.com/tgdrive/teldrive/v2/internal/contentcrypto"
 	"github.com/tgdrive/teldrive/v2/internal/db/sqlcgen"
+	"github.com/tgdrive/teldrive/v2/internal/streamdiag"
 	"github.com/tgdrive/teldrive/v2/internal/telegramstore"
 )
 
@@ -103,10 +104,12 @@ func (d *Downloader) openOrigin(ctx context.Context, request DownloadRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	streamdiag.Mark(ctx, "telegram-session-open")
 	session, err := d.openDownloadSession(ctx, request.UserID)
 	if err != nil {
 		return nil, err
 	}
+	streamdiag.Mark(ctx, "telegram-session-ready")
 	keepSession := false
 	defer func() {
 		if !keepSession {

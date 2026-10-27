@@ -37,6 +37,7 @@ import (
 	"github.com/tgdrive/teldrive/v2/internal/legacymigrate"
 	"github.com/tgdrive/teldrive/v2/internal/secureblob"
 	"github.com/tgdrive/teldrive/v2/internal/shares"
+	"github.com/tgdrive/teldrive/v2/internal/streamdiag"
 	"github.com/tgdrive/teldrive/v2/internal/telegramstore"
 	"github.com/tgdrive/teldrive/v2/internal/transfer"
 	"github.com/tgdrive/teldrive/v2/internal/uploads"
@@ -234,6 +235,7 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ap
 	}
 	mux := chi.NewRouter()
 	mux.Use(requestIDMiddleware)
+	mux.Use(streamdiag.Middleware(os.Getenv("STREAM_SYNTHETIC_DIAG_TOKEN"), os.Getenv("STREAM_SYNTHETIC_DIAG_UNTIL"), time.Now))
 	requestSecurity, err := newRequestSecurity(cfg.HTTP.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("configure trusted proxies: %w", err)
