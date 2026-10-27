@@ -318,11 +318,14 @@ func (s *gotdDownloadSession) OpenRange(ctx context.Context, request RangeReques
 	streamCtx, cancel := context.WithCancel(ctx)
 	reader := newTelegramRangeReader(streamCtx, cancel, s.downloadReadBuffers, s.downloadReadParallel)
 	go func() {
+		streamdiag.Mark(streamCtx, "document-resolve")
 		location, size, locationErr := s.documentLocation(streamCtx, api, request.ChannelID, request.MessageID)
 		if locationErr != nil {
+			markSyntheticFailure(streamCtx, locationErr)
 			reader.finish(locationErr)
 			return
 		}
+		streamdiag.Mark(streamCtx, "document-resolved")
 		refresh := func(refreshCtx context.Context) (*tg.InputDocumentFileLocation, error) {
 			refreshed, _, refreshErr := s.refreshDocumentLocation(refreshCtx, api, request.ChannelID, request.MessageID)
 			return refreshed, refreshErr
@@ -538,10 +541,13 @@ func (r *telegramRangeReader) fill(ctx context.Context, api *tg.Client, location
 			}
 
 			if err != nil {
+				markSyntheticFailure(fetchCtx, err)
 				result.err = fmt.Errorf("download Telegram document chunk at %d: %w", plan.offset, err)
 			} else if file, ok := response.(*tg.UploadFile); !ok {
+				streamdiag.Mark(fetchCtx, "unexpected-response")
 				result.err = fmt.Errorf("unexpected Telegram download response %T", response)
 			} else if end := plan.skip + plan.length; len(file.Bytes) < end {
+				streamdiag.Mark(fetchCtx, "short-read")
 				result.err = io.ErrUnexpectedEOF
 			} else {
 				result.payload = file.Bytes[plan.skip:end]
@@ -982,4 +988,42 @@ type cancelReadCloser struct {
 func (r *cancelReadCloser) Close() error {
 	r.cancel()
 	return r.ReadCloser.Close()
+}
+
+// Only fixed, reviewed categories can enter the temporary synthetic response.
+func markSyntheticFailure(ctx context.Context, err error) {
+	if !streamdiag.Active(ctx) {
+		return
+	}
+	if errors.Is(err, ErrMessageNotFound) {
+		streamdiag.Mark(ctx, "message-unavailable")
+		return
+	}
+	if errors.Is(err, ErrDocumentNotFound) {
+		streamdiag.Mark(ctx, "document-unavailable")
+		return
+	}
+	if rpc, ok := tgerr.As(err); ok {
+		switch rpc.Type {
+		case "CHANNEL_PRIVATE", "CHANNEL_INVALID", "PEER_ID_INVALID":
+			streamdiag.Mark(ctx, "source-access")
+			return
+		case "FILE_REFERENCE_EXPIRED", "FILE_REFERENCE_INVALID":
+			streamdiag.Mark(ctx, "file-reference")
+			return
+		case "FILE_MIGRATE":
+			streamdiag.Mark(ctx, "file-route")
+			return
+		case "AUTH_KEY_UNREGISTERED", "SESSION_REVOKED", "AUTH_KEY_DUPLICATED":
+			streamdiag.Mark(ctx, "authorization")
+			return
+		case "FLOOD_WAIT":
+			streamdiag.Mark(ctx, "rate-limit")
+			return
+		case "OFFSET_INVALID", "LIMIT_INVALID", "LOCATION_INVALID":
+			streamdiag.Mark(ctx, "range-location")
+			return
+		}
+	}
+	streamdiag.Mark(ctx, "upstream-other")
 }
