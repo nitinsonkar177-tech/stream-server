@@ -9,6 +9,7 @@ import { normalizeApiError, userMessage } from "@/api/errors";
 import type { FileEntry } from "@/api/types";
 import { currentUserQueryOptions } from "@/auth/queries";
 import { BackgroundUploadDialog } from "@/components/background-upload-dialog";
+import { ImportTelegramLinkDialog } from "@/components/import-telegram-link-dialog";
 import { AppDialog } from "@/components/dialogs/app-dialog";
 import { isPreviewable } from "@/components/file-preview-dialog";
 import { Page, PageContent } from "@/components/page";
@@ -17,6 +18,7 @@ import PasteIcon from "~icons/gravity-ui/arrow-right-to-square";
 import UploadIcon from "~icons/gravity-ui/arrow-up-from-line";
 import FileIcon from "~icons/gravity-ui/file";
 import FolderIcon from "~icons/gravity-ui/folder";
+import LinkIcon from "~icons/gravity-ui/link";
 import SplitIcon from "~icons/gravity-ui/layout-split-columns";
 import PlusIcon from "~icons/gravity-ui/plus";
 import CloseIcon from "~icons/gravity-ui/xmark";
@@ -128,6 +130,7 @@ export function FileManagerPage({
   const [secondarySelectedKeys, setSecondarySelectedKeys] = useState<Selection>(new Set());
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [backgroundUploadOpen, setBackgroundUploadOpen] = useState(false);
+  const [telegramImportOpen, setTelegramImportOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [previewFile, setPreviewFile] = useState<FileEntry>();
   const [renameFile, setRenameFile] = useState<FileEntry>();
@@ -669,6 +672,7 @@ export function FileManagerPage({
                 if (key === "files") uploadFilesTriggerRef.current?.click();
                 if (key === "folder") uploadFolderTriggerRef.current?.click();
                 if (key === "background") setBackgroundUploadOpen(true);
+                if (key === "telegramImport") setTelegramImportOpen(true);
               }}
             >
               <Dropdown.Item id="files" textValue={t("files.uploadFiles")}>
@@ -683,6 +687,12 @@ export function FileManagerPage({
                 <Dropdown.Item id="background" textValue={t("uploads.bgTitle")}>
                   <UploadIcon className="size-4" />
                   <Label>{t("uploads.bgTitle")}</Label>
+                </Dropdown.Item>
+              ) : null}
+              {canLocalImport ? (
+                <Dropdown.Item id="telegramImport" textValue={t("imports.menuItem")}>
+                  <LinkIcon className="size-4" />
+                  <Label>{t("imports.menuItem")}</Label>
                 </Dropdown.Item>
               ) : null}
             </Dropdown.Menu>
@@ -1023,6 +1033,7 @@ export function FileManagerPage({
         onOpenChange={setBackgroundUploadOpen}
         currentPath={activeLocation.path}
       />
+      <ImportTelegramLinkDialog open={telegramImportOpen} onOpenChange={setTelegramImportOpen} />
 
       <FileActionDialogs
         renameFile={renameFile}

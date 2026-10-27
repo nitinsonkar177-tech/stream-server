@@ -32,6 +32,7 @@ import (
 	userevents "github.com/tgdrive/teldrive/v2/internal/events"
 	"github.com/tgdrive/teldrive/v2/internal/fileops"
 	"github.com/tgdrive/teldrive/v2/internal/health"
+	"github.com/tgdrive/teldrive/v2/internal/imports"
 	"github.com/tgdrive/teldrive/v2/internal/jobs"
 	"github.com/tgdrive/teldrive/v2/internal/legacymigrate"
 	"github.com/tgdrive/teldrive/v2/internal/secureblob"
@@ -238,6 +239,14 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ap
 		return nil, fmt.Errorf("configure trusted proxies: %w", err)
 	}
 	mux.Use(httpRequestLogger(dependencies.Logger, requestSecurity))
+	if linkResolver, ok := storage.(imports.Resolver); ok {
+		if importService, importErr := imports.NewService(pool, linkResolver); importErr == nil {
+			importHandler := imports.NewHTTPHandler(authenticator, importService)
+			mux.Post("/api/v1/import/telegram-link", requestSecurity.middleware(browserCSRFMiddleware(sessionRenewalMiddleware(authService, importHandler))))
+		} else {
+			dependencies.Logger.Warn("telegram link import route unavailable", "error", importErr)
+		}
+	}
 	routeApplication(mux, requestSecurity.middleware(browserCSRFMiddleware(sessionRenewalMiddleware(authService, httpServer))), webUI)
 
 	application := &App{
