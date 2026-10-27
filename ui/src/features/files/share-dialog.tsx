@@ -54,6 +54,7 @@ export function ShareDialog({
   const [linkExpirationMode, setLinkExpirationMode] = useState<ExpirationMode>("never");
   const [linkDuration, setLinkDuration] = useState("1d");
   const [createdUrl, setCreatedUrl] = useState("");
+  const [createdStreamUrl, setCreatedStreamUrl] = useState("");
   const { t } = useAppLocale();
   const formatDateTime = useDateTimeFormatter();
 
@@ -67,6 +68,7 @@ export function ShareDialog({
     setLinkExpirationMode("never");
     setLinkDuration("1d");
     setCreatedUrl("");
+    setCreatedStreamUrl("");
   }, [file?.id]);
 
   const grantsQuery = useQuery({
@@ -128,6 +130,40 @@ export function ShareDialog({
     }
   };
 
+  // Raw, cookieless content URL for open shares - the link external players
+  // (MX Player, VLC) can stream directly. The /share/<token> page URL is HTML
+  // and cannot be played; this derives the raw URL from it.
+  const streamUrlFor = (pageUrl: string, fileName: string) => {
+    try {
+      const token =
+        new URL(pageUrl, window.location.origin).pathname.split("/").filter(Boolean).pop() ?? "";
+      if (!token) return "";
+      return new URL(
+        `/api/v1/public/shares/${encodeURIComponent(token)}/content/${encodeURIComponent(fileName)}`,
+        window.location.origin,
+      ).toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const copyStreamLink = async (pageUrl: string) => {
+    if (!file) return;
+    const streamUrl = streamUrlFor(pageUrl, file.name);
+    if (!streamUrl) {
+      toast.error(t("share.streamUnavailable"));
+      return;
+    }
+    try {
+      await copyText(streamUrl);
+      toast.success(t("share.streamCopied"));
+    } catch (error) {
+      toast.error(t("share.streamCopyFailed"), {
+        description: userMessage(error),
+      });
+    }
+  };
+
   const createPublicLink = async () => {
     if (!file) return;
     try {
@@ -144,6 +180,9 @@ export function ShareDialog({
       });
       const publicUrl = new URL(result.publicUrl, window.location.origin).toString();
       setCreatedUrl(publicUrl);
+      setCreatedStreamUrl(
+        !linkPassword.trim() && file.kind === "file" ? streamUrlFor(publicUrl, file.name) : "",
+      );
       await copyText(publicUrl);
       await refreshLinks();
       toast.success(t("share.linkCreated"));
@@ -384,6 +423,23 @@ export function ShareDialog({
               >
                 {t("share.copy")}
               </Button>
+            </div>
+          ) : null}
+
+          {createdStreamUrl ? (
+            <div className="grid gap-1.5 rounded-xl border border-border bg-surface p-3">
+              <span className="text-xs font-medium text-muted">{t("share.streamLinkLabel")}</span>
+              <div className="flex gap-2">
+                <Input readOnly value={createdStreamUrl} className="min-w-0 flex-1" />
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onPress={() => void copyStreamLink(createdUrl)}
+                >
+                  {t("share.copy")}
+                </Button>
+              </div>
+              <span className="text-xs text-muted">{t("share.streamHint")}</span>
             </div>
           ) : null}
 
