@@ -52,6 +52,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@vplayer/react@0.4.4": "patches/@vplayer%2Freact@0.4.4.patch",
+  },
   "overrides": {
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

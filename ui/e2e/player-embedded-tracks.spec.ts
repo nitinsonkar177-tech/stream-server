@@ -17,6 +17,12 @@ const bytes = (name: string) => readFileSync(new URL(`./fixtures/player/${name}`
 
 type Item = { id: string; name: string; mimeType: string; data: Buffer };
 const items = {
+  mp4: {
+    id: "b0000000-0000-4000-8000-000000000006",
+    name: "Multi.mp4",
+    mimeType: "video/mp4",
+    data: bytes("multi-track.mp4"),
+  },
   multi: {
     id: "b0000000-0000-4000-8000-000000000001",
     name: "Multi.mkv",
@@ -335,6 +341,26 @@ test.describe("embedded tracks in the web player (the owner allows it on the sha
   test.beforeEach(async ({ page }) => {
     // The visitor has no setting at all: the share itself says the owner allows it.
     await installShare(page, { embeddedTracks: true });
+  });
+
+  test("MP4 lists AAC and AC3 audio and switches actual tones", async ({ page }) => {
+    await openVideo(page, items.mp4.name);
+    await expect.poll(() => currentTime(page)).toBeGreaterThan(0.3);
+    await installDetector(page);
+    await expectTone(page, 440);
+    for (const [label, hz] of [["Hindi", 880], ["Track 3", 660]] as const) {
+      await openSettingsMenu(page);
+      await page.getByText("Audio", { exact: true }).click();
+      await page.getByText(label, { exact: true }).click();
+      await expectTone(page, hz);
+    }
+    await seek(page, 5);
+    await video(page).evaluate((v: HTMLVideoElement) => v.play());
+    await expectTone(page, 660);
+    await expect.poll(() => currentTime(page)).toBeGreaterThan(5.3);
+    await openSettingsMenu(page);
+    await page.getByText("Audio", { exact: true }).click();
+    await page.screenshot({ path: "/tmp/stream-proof/mp4-patched-built-ui.png" });
   });
 
   test("lists the audio tracks and switches between them", async ({ page }) => {

@@ -3,6 +3,7 @@ ARG VERSION=dev
 WORKDIR /src
 COPY openapi ./openapi
 COPY ui/package.json ui/bun.lock ./ui/
+COPY ui/patches ./ui/patches
 RUN bun install --frozen-lockfile --cwd ui
 COPY ui ./ui
 RUN VERSION="${VERSION}" bun run --cwd ui build

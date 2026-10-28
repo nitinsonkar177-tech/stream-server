@@ -1,0 +1,42 @@
+diff --git a/dist/embedded-tracks-CsqsIeWY-Dhymmrpj.js b/dist/embedded-tracks-CsqsIeWY-Dhymmrpj.js
+index 2c633478939e4a0e3f96fb863750d236af3e5657..6d8f606a1aa98ee03bf46e4a4101d3a91cd82a2b 100644
+--- a/dist/embedded-tracks-CsqsIeWY-Dhymmrpj.js
++++ b/dist/embedded-tracks-CsqsIeWY-Dhymmrpj.js
+@@ -606,6 +606,9 @@ var ee = class {
+ 		try {
+ 			o = await O.open(new v(n, { signal: e }));
+ 		} catch {
++			// ISO BMFF uses the same bounded generic remuxer, not the Matroska parser.
++			if (/\.(mp4|m4v|mov)(?:$|[?#])/i.test(n) && !e.aborted && !this.disposed)
++				return await this.startRemux(e) ?? a;
+ 			return a;
+ 		}
+ 		if (e.aborted || this.disposed) return a;
+@@ -635,7 +638,8 @@ var ee = class {
+ 				a.dispose();
+ 				return;
+ 			}
+-			if (a.audioTracks.filter((e) => e.mode !== "unsupported").length === 0) {
++			// Keep single directly playable tracks on the native path.
++			if (a.audioTracks.length === 1 && a.audioTracks[0].mode === "direct" || a.audioTracks.filter((e) => e.mode !== "unsupported").length === 0) {
+ 				a.dispose();
+ 				return;
+ 			}
+diff --git a/dist/index.js b/dist/index.js
+index 66cebd317da6d42bf33a5be98ebb23f5f8e95ce0..8fa82b9a34c09df4ae98ed4944f838c79c7216cf 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2206,8 +2206,11 @@ function Ye(e) {
+ 		"video/x-matroska",
+ 		"audio/x-matroska",
+ 		"video/webm",
+-		"audio/webm"
+-	].includes(t) ? !0 : /\.(mkv|mka|webm)$/i.test(qe(e.src));
++		"audio/webm",
++		"video/mp4",
++		"video/x-m4v",
++		"video/quicktime"
++	].includes(t) ? !0 : /\.(mkv|mka|webm|mp4|m4v|mov)$/i.test(qe(e.src));
+ }
+ function Xe(e) {
+ 	return {
