@@ -18,7 +18,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=ui-build /src/ui/dist ./ui/dist
-RUN CGO_ENABLED=0 go test ./db/migrations ./internal/imports ./internal/telegramstore ./internal/transfer ./internal/api
+RUN CGO_ENABLED=0 go test ./db/migrations ./internal/imports ./internal/telegramstore ./internal/transfer ./internal/api ./internal/maintenance
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
     -o /out/teldrive ./cmd/teldrive

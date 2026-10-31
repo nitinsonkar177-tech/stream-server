@@ -35,6 +35,7 @@ import (
 	"github.com/tgdrive/teldrive/v2/internal/imports"
 	"github.com/tgdrive/teldrive/v2/internal/jobs"
 	"github.com/tgdrive/teldrive/v2/internal/legacymigrate"
+	"github.com/tgdrive/teldrive/v2/internal/maintenance"
 	"github.com/tgdrive/teldrive/v2/internal/secureblob"
 	"github.com/tgdrive/teldrive/v2/internal/shares"
 	"github.com/tgdrive/teldrive/v2/internal/telegramstore"
@@ -57,6 +58,8 @@ type Dependencies struct {
 type App struct {
 	config            config.Config
 	pool              *pgxpool.Pool
+	secureCipher      *secureblob.Cipher
+	telegramFactory   *telegramstore.Factory
 	http              *http.Server
 	jobs              *jobs.Runtime
 	events            *userevents.Service
@@ -253,6 +256,8 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ap
 	application := &App{
 		config:            cfg,
 		pool:              pool,
+		secureCipher:      secureCipher,
+		telegramFactory:   telegram.factory,
 		jobs:              jobRuntime,
 		events:            eventService,
 		telegramDownloads: telegram.downloadClients,
@@ -337,6 +342,16 @@ func (a *App) Cache() cache.Cacher {
 func (a *App) Run(ctx context.Context) error {
 	if a == nil || a.http == nil || a.jobs == nil || a.events == nil || a.pool == nil {
 		return ErrInvalidDependencies
+	}
+	// One-off operator cleanup, gated by environment; a no-op when unset.
+	// Runs before the socket opens so its result is logged before serving.
+	if report, err := maintenance.RevokeSessionFromEnv(ctx, a.pool, a.secureCipher, a.telegramFactory, slog.Default()); err != nil {
+		slog.Default().Error("maintenance.revoke_session.failed", "error", err)
+	} else if report != nil {
+		slog.Default().Info("maintenance.revoke_session.report",
+			"found", report.Found, "had_key_material", report.HadKeyMaterial,
+			"logged_out", report.LoggedOut, "already_invalid", report.AlreadyInvalid,
+			"key_cleared", report.KeyCleared)
 	}
 	listener, err := net.Listen("tcp", a.config.HTTP.Address)
 	if err != nil {

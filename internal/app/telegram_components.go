@@ -22,6 +22,7 @@ import (
 
 type telegramComponents struct {
 	login           authn.TelegramLogin
+	factory         *telegramstore.Factory
 	verifier        bots.Verifier
 	account         telegramstore.Account
 	storage         telegramstore.Storage
@@ -150,7 +151,7 @@ func buildTelegramComponents(cfg config.Config, pool *pgxpool.Pool, cipher *secu
 			storage = telegramstore.NewGotdStorage(uploadRunner, globalCache, options...)
 		}
 		return telegramComponents{
-			login: login, verifier: verifier, account: account, storage: storage, downloadClients: downloadClients,
+			login: login, factory: factory, verifier: verifier, account: account, storage: storage, downloadClients: downloadClients,
 		}, nil
 
 	default:
