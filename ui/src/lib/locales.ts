@@ -101,6 +101,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "Appearance",
     "settings.item.reader": "Reader",
     "settings.item.player": "Player",
+    "player.videoUndecodable":
+      "This browser can't decode the picture of this video. Audio may still play. Try a browser that supports its codec, or download the file and open it in a player such as VLC.",
+    "player.dismissNotice": "Dismiss",
     "player.captionsDescription":
       "Subtitle style and timing saved to your account across browsers and devices. Preview changes here, then save to apply them to the player.",
     "readerSettings.description": "PDF brightness and document storage in this browser.",
@@ -1150,6 +1153,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "Apariencia",
     "settings.item.reader": "Lector",
     "settings.item.player": "Reproductor",
+    "player.videoUndecodable":
+      "Este navegador no puede decodificar la imagen de este video. Es posible que el audio siga reproduciéndose. Prueba con un navegador que admita su códec, o descarga el archivo y ábrelo en un reproductor como VLC.",
+    "player.dismissNotice": "Descartar",
     "player.captionsDescription":
       "El estilo y la sincronización de los subtítulos se guardan en tu cuenta. Previsualiza los cambios y guárdalos para aplicarlos al reproductor.",
     "readerSettings.description": "Brillo de PDF y almacenamiento de documentos en este navegador.",
@@ -2186,6 +2192,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "Aparência",
     "settings.item.reader": "Leitor",
     "settings.item.player": "Reprodutor",
+    "player.videoUndecodable":
+      "Este navegador não consegue decodificar a imagem deste vídeo. O áudio pode continuar tocando. Tente um navegador compatível com o codec, ou baixe o arquivo e abra-o em um player como o VLC.",
+    "player.dismissNotice": "Dispensar",
     "player.captionsDescription":
       "O estilo e a sincronização das legendas são salvos na sua conta. Visualize as alterações e salve para aplicá-las ao reprodutor.",
     "readerSettings.description": "Brilho de PDF e armazenamento de documentos neste navegador.",
@@ -3218,6 +3227,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "Оформление",
     "settings.item.reader": "Чтение",
     "settings.item.player": "Проигрыватель",
+    "player.videoUndecodable":
+      "Этот браузер не может декодировать изображение этого видео. Звук может продолжать играть. Попробуйте браузер с поддержкой его кодека или скачайте файл и откройте его в проигрывателе, например VLC.",
+    "player.dismissNotice": "Скрыть",
     "player.captionsDescription":
       "Оформление и синхронизация субтитров сохраняются в вашей учётной записи. Просмотрите изменения и сохраните их для применения в плеере.",
     "readerSettings.description": "Яркость PDF и хранение документов в этом браузере.",
@@ -4251,6 +4263,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "Apparence",
     "settings.item.reader": "Lecture",
     "settings.item.player": "Lecteur vidéo",
+    "player.videoUndecodable":
+      "Ce navigateur ne peut pas décoder l'image de cette vidéo. Le son peut continuer à jouer. Essayez un navigateur prenant en charge son codec, ou téléchargez le fichier et ouvrez-le dans un lecteur tel que VLC.",
+    "player.dismissNotice": "Ignorer",
     "player.captionsDescription":
       "Le style et la synchronisation des sous-titres sont enregistrés dans votre compte. Prévisualisez les modifications, puis enregistrez-les pour les appliquer au lecteur.",
     "readerSettings.description":
@@ -5296,6 +5311,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "Darstellung",
     "settings.item.reader": "Lesen",
     "settings.item.player": "Player",
+    "player.videoUndecodable":
+      "Dieser Browser kann das Bild dieses Videos nicht dekodieren. Der Ton läuft möglicherweise weiter. Versuche einen Browser, der den Codec unterstützt, oder lade die Datei herunter und öffne sie in einem Player wie VLC.",
+    "player.dismissNotice": "Ausblenden",
     "player.captionsDescription":
       "Untertitelstil und Synchronisierung werden in deinem Konto gespeichert. Prüfe die Vorschau und speichere die Änderungen, um sie im Player anzuwenden.",
     "readerSettings.description": "PDF-Helligkeit und Dokumentenspeicherung in diesem Browser.",
@@ -6330,6 +6348,9 @@ export const STRINGS: Record<AppLocale, Record<string, string>> = {
     "settings.item.appearance": "外观",
     "settings.item.reader": "阅读器",
     "settings.item.player": "播放器",
+    "player.videoUndecodable":
+      "此浏览器无法解码该视频的画面，声音可能仍会播放。请尝试使用支持其编解码器的浏览器，或下载文件后用 VLC 等播放器打开。",
+    "player.dismissNotice": "忽略",
     "player.captionsDescription":
       "字幕样式和时间设置会保存到你的账户，并在浏览器和设备间同步。预览更改后保存，即可应用到播放器。",
     "readerSettings.description": "此浏览器中的 PDF 亮度和文档存储设置。",

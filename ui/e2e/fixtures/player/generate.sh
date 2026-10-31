@@ -85,3 +85,9 @@ ffmpeg -loglevel error -y \
   -f lavfi -i "sine=frequency=660:duration=8:sample_rate=48000" \
   -map 0:v -map 1:a "${VP9[@]}" -c:a eac3 -b:a 64k -ac 2 \
   eac3-only.mkv
+
+# hevc-unsupported.mkv: synthetic HEVC video + AAC tone, for the unsupported-codec notice test
+# (player-unsupported-codec.spec.ts). Browsers without HEVC decode play the tone against a
+# black picture; the viewer must show its honest notice instead of staying silent.
+# ffmpeg -f lavfi -i testsrc2=size=640x360:rate=24:duration=8 -f lavfi -i sine=frequency=440:duration=8 \
+#   -c:v libx265 -preset ultrafast -crf 30 -pix_fmt yuv420p -c:a aac -b:a 96k hevc-unsupported.mkv
