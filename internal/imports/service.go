@@ -70,7 +70,9 @@ func NewService(pool *pgxpool.Pool, resolver Resolver) (*Service, error) {
 
 func (s *Service) SetCacheInvalidator(i interface {
 	InvalidateFiles(context.Context, int64, ...uuid.UUID)
-}) { s.invalidator = i }
+}) {
+	s.invalidator = i
+}
 
 // ImportTelegramLink registers a Telegram channel message's media as a file
 // at the importing user's drive root. No media bytes are copied: the catalog
@@ -129,6 +131,27 @@ func (s *Service) ImportTelegramLink(ctx context.Context, userID int64, rawURL s
 		}
 	}
 
+	// A file deleted from the drive (trashed or pending permanent deletion)
+	// still holds its file_parts row, and the unique (channel_id, message_id)
+	// constraint then blocks a fresh import with a misleading
+	// "already in your drive" conflict. The link is not in the drive any
+	// more, so revive that file instead of failing: it keeps its file ID,
+	// returns to the root when its folder is gone, and gets a fresh name
+	// only when an active file already owns the old one.
+	revived, err := reviveDeletedImport(ctx, tx, userID, document, strings.ToLower(ref.Username))
+	if err != nil {
+		return nil, err
+	}
+	if revived != nil {
+		if err = tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		if s.invalidator != nil {
+			s.invalidator.InvalidateFiles(ctx, userID, revived.FileID)
+		}
+		return revived, nil
+	}
+
 	var fileID pgtype.UUID
 	for attempt := 0; attempt < 20; attempt++ {
 		candidate := candidateName(name, attempt)
@@ -177,13 +200,115 @@ func (s *Service) ImportTelegramLink(ctx context.Context, userID int64, rawURL s
 	return &Result{FileID: fileID.Bytes, Name: name, Size: document.Size, MIMEType: mimeType}, nil
 }
 
+// reviveDeletedImport brings back the importing user's own deleted file whose
+// part references the resolved Telegram message. It returns nil when no such
+// deleted file exists or when a concurrent permanent deletion wins the race;
+// the caller then falls through to a fresh import. Reaching this point means
+// the resolver already confirmed the Telegram message and its media still
+// exist, so the revived reference points at real content. Files whose folder
+// is still active stay in place; others come back at the drive root, like a
+// fresh import. Trashing revoked the file's shares and they stay revoked.
+func reviveDeletedImport(ctx context.Context, tx pgx.Tx, userID int64, document *ResolvedDocument, username string) (*Result, error) {
+	mimeType := strings.TrimSpace(document.MIMEType)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	var (
+		fileID   pgtype.UUID
+		name     string
+		parentID pgtype.UUID
+	)
+	err := tx.QueryRow(ctx, `SELECT f.id, f.name, f.parent_id
+ FROM `+sqlcgen.QualifiedName("file_parts")+` p
+ JOIN `+sqlcgen.QualifiedName("files")+` f ON f.id = p.file_id
+ WHERE f.user_id = $1 AND f.status <> 'active'
+ AND p.channel_id = $2 AND p.message_id = $3
+ LIMIT 1`, userID, document.ChannelID, document.MessageID).
+		Scan(&fileID, &name, &parentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find deleted import: %w", err)
+	}
+
+	targetParent := parentID
+	if parentID.Valid {
+		var parentActive bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM `+sqlcgen.QualifiedName("files")+`
+			WHERE id = $1 AND user_id = $2 AND status = 'active'
+		)`, parentID, userID).Scan(&parentActive); err != nil {
+			return nil, fmt.Errorf("check deleted import parent: %w", err)
+		}
+		if !parentActive {
+			targetParent = pgtype.UUID{}
+		}
+	}
+
+	finalName := name
+	for attempt := 0; ; attempt++ {
+		if attempt > 0 {
+			finalName = candidateName(name, attempt)
+		}
+		exists, err := fileNameExistsAtParent(ctx, tx, userID, targetParent, finalName)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			break
+		}
+		if attempt >= 19 {
+			return nil, errors.New("could not find a free file name for the revived import")
+		}
+	}
+
+	// One atomic conditional update closes the permanent-deletion race: the row
+	// is restored only while it is still deleted AND its part row still
+	// references this Telegram message. The pending-deletion purge deletes only
+	// 'deletion_pending' rows, so once this commit lands the purge skips the
+	// file; if the purge lands first, zero rows match and a fresh import runs.
+	// Size and MIME type come from the freshly resolved document, because the
+	// channel message's media may have been replaced since the first import.
+	restored, err := tx.Exec(ctx, `UPDATE `+sqlcgen.QualifiedName("files")+`
+ SET status = 'active', deleted_at = NULL, generation = generation + 1,
+ updated_at = now(), parent_id = $1, name = $2, size = $3, mime_type = $4
+ WHERE id = $5 AND user_id = $6 AND status <> 'active'
+ AND EXISTS (
+	SELECT 1 FROM `+sqlcgen.QualifiedName("file_parts")+` p
+	WHERE p.file_id = files.id AND p.channel_id = $7 AND p.message_id = $8
+ )`,
+		targetParent, finalName, document.Size, mimeType,
+		fileID, userID, document.ChannelID, document.MessageID)
+	if err != nil {
+		return nil, fmt.Errorf("revive deleted import: %w", err)
+	}
+	if restored.RowsAffected() == 0 {
+		return nil, nil
+	}
+	// Refresh the stored public source exactly like the active repair path, so
+	// playback of the revived file resolves the Telegram peer again.
+	if _, err := tx.Exec(ctx, `UPDATE `+sqlcgen.QualifiedName("file_parts")+`
+ SET source_username = NULLIF($1,''), plain_size = $2, stored_size = $2
+ WHERE file_id = $3 AND channel_id = $4 AND message_id = $5`,
+		username, document.Size, fileID, document.ChannelID, document.MessageID); err != nil {
+		return nil, fmt.Errorf("refresh revived import source: %w", err)
+	}
+
+	return &Result{FileID: fileID.Bytes, Name: finalName, Size: document.Size, MIMEType: mimeType}, nil
+}
+
 func fileNameExistsAtRoot(ctx context.Context, tx pgx.Tx, userID int64, name string) (bool, error) {
+	return fileNameExistsAtParent(ctx, tx, userID, pgtype.UUID{}, name)
+}
+
+func fileNameExistsAtParent(ctx context.Context, tx pgx.Tx, userID int64, parentID pgtype.UUID, name string) (bool, error) {
 	var exists bool
 	err := tx.QueryRow(ctx,
 		`SELECT EXISTS(
 			SELECT 1 FROM `+sqlcgen.QualifiedName("files")+`
-			WHERE user_id = $1 AND parent_id IS NULL AND status = 'active' AND name = $2
-		)`, userID, name,
+			WHERE user_id = $1 AND parent_id IS NOT DISTINCT FROM $2 AND status = 'active' AND name = $3
+		)`, userID, parentID, name,
 	).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check imported file name: %w", err)
